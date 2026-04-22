@@ -7,12 +7,12 @@ import { generateAIResponse } from "@/lib/ai/client"
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as Partial<QnARequest>
-    const problemId = body.problemId?.trim()
     const question = body.question?.trim()
+    const problemId = body.problemId?.trim()
 
-    if (!problemId || !question) {
+    if (!question) {
       return NextResponse.json(
-        { success: false, error: "Missing required fields" },
+        { success: false, error: "Question is required" },
         { status: 400 }
       )
     }
@@ -24,36 +24,76 @@ export async function POST(request: Request) {
       )
     }
 
-    const problem = getStoryProblem(problemId)
-
-    if (!problem) {
-      return NextResponse.json(
-        { success: false, error: "Problem not found" },
-        { status: 404 }
-      )
-    }
+    const problem = problemId ? getStoryProblem(problemId) : null
+    const wantsStory = body.askForStory || /similar|like this|new story|another story|story problem/i.test(question)
+    const wantsStepByStep = body.askForStepByStep || /step by step|solve|solution|how to solve/i.test(question)
+    const language = body.language === "hi" ? "hi" : "en"
 
     const prompt = [
-      `Problem: ${problem.problem_text}`,
-      `Question from learner: ${question}`,
+      language === "hi"
+        ? "Learner language preference: Hindi (Roman Hindi allowed)."
+        : "Learner language preference: English.",
+      problem ? `Current story problem: ${problem.problem_text}` : "No active story problem is required for this question.",
+      `Learner question: ${question}`,
+      `Need step-by-step solve: ${wantsStepByStep ? "yes" : "no"}`,
+      `Need similar story generation: ${wantsStory ? "yes" : "no"}`,
       body.context?.stage ? `Current stage: ${body.context.stage}` : "",
       body.context?.selectedOperation ? `Selected operation: ${body.context.selectedOperation}` : "",
       body.context?.equationDraft ? `Equation draft: ${body.context.equationDraft}` : "",
+      "Return strict JSON only with keys: mode, answer, steps, generatedStory.",
+      "mode must be one of: explain, solve, story.",
+      "answer must be short and clear for students.",
+      "steps must be an array of short strings when solving is requested.",
+      "generatedStory must be null unless user requests a similar/new story, then include title, story, question, equationHint.",
     ]
       .filter(Boolean)
       .join("\n")
 
-    const rawAnswer = await generateAIResponse({
+    const rawResponse = await generateAIResponse({
       prompt,
       systemPrompt:
-        "You are a friendly math helper for kids. Give short, clear guidance. Do not reveal the full final answer unless explicitly asked to check a completed setup.",
+        "You are a friendly math tutor for kids. You can answer any math question, solve when requested, and create a similar story problem when requested. Keep responses clear, age-appropriate, and concise.",
+      jsonMode: true,
     })
 
-    const answer = typeof rawAnswer === "string"
-      ? rawAnswer
-      : "Great question. Try focusing on what the story asks you to find first, then choose the matching operation."
+    const ai = (rawResponse ?? {}) as Partial<QnAResponse>
 
-    const response: QnAResponse = { answer }
+    const response: QnAResponse = {
+      mode: ai.mode === "solve" || ai.mode === "story" ? ai.mode : "explain",
+      answer:
+        typeof ai.answer === "string" && ai.answer.trim().length > 0
+          ? ai.answer
+          : "Great question. Tell me what part you want to understand, solve, or turn into a story problem.",
+      steps: Array.isArray(ai.steps)
+        ? ai.steps.filter((step): step is string => typeof step === "string" && step.trim().length > 0).slice(0, 6)
+        : undefined,
+      generatedStory:
+        ai.generatedStory &&
+        typeof ai.generatedStory === "object" &&
+        typeof ai.generatedStory.title === "string" &&
+        typeof ai.generatedStory.story === "string" &&
+        typeof ai.generatedStory.question === "string"
+          ? {
+              title: ai.generatedStory.title,
+              story: ai.generatedStory.story,
+              question: ai.generatedStory.question,
+              equationHint:
+                typeof ai.generatedStory.equationHint === "string"
+                  ? ai.generatedStory.equationHint
+                  : undefined,
+            }
+          : undefined,
+    }
+
+    if (wantsStory && !response.generatedStory) {
+      response.generatedStory = {
+        title: "Snack Shop Story",
+        story: "A snack shop sold 18 juice boxes in the morning and 14 in the afternoon. Then 5 were returned.",
+        question: "How many juice boxes were sold in total after returns?",
+        equationHint: "x = 18 + 14 - 5",
+      }
+      response.mode = "story"
+    }
 
     return NextResponse.json({
       success: true,
@@ -64,7 +104,8 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       success: true,
-      answer: "I can help with that. Try asking in one short sentence about the step you are on.",
+      mode: "explain",
+      answer: "I can help with any math question. Ask me to explain, solve step-by-step, or create a similar story problem.",
     })
   }
 }

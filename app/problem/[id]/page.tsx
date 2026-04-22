@@ -63,7 +63,7 @@ export default function ProblemPage() {
   const [showSolution, setShowSolution] = useState(false)
   const [autoRead, setAutoRead] = useState(true)
   const [questionInput, setQuestionInput] = useState("")
-  const [qnaAnswer, setQnaAnswer] = useState<string | null>(null)
+  const [qnaResult, setQnaResult] = useState<QnAResponse | null>(null)
   const [qnaLoading, setQnaLoading] = useState(false)
   const [qnaError, setQnaError] = useState<string | null>(null)
 
@@ -79,7 +79,7 @@ export default function ProblemPage() {
     setHintLevel(1)
     setShowSolution(false)
     setQuestionInput("")
-    setQnaAnswer(null)
+    setQnaResult(null)
     setQnaError(null)
   }, [problem.id, problem.autoEquation])
 
@@ -165,6 +165,9 @@ export default function ProblemPage() {
         body: JSON.stringify({
           problemId: problem.id,
           question,
+          language,
+          askForStepByStep: /step by step|solve|solution/i.test(question),
+          askForStory: /similar|like this|another story|new story|story problem/i.test(question),
           context: {
             stage,
             selectedOperation,
@@ -179,7 +182,7 @@ export default function ProblemPage() {
         throw new Error(data.error ?? "Unable to answer this question right now.")
       }
 
-      setQnaAnswer(data.answer)
+      setQnaResult(data as QnAResponse)
     } catch (error) {
       console.error("QnA request failed:", error)
       setQnaError(error instanceof Error ? error.message : "Unable to answer this question right now.")
@@ -364,11 +367,14 @@ export default function ProblemPage() {
               <MessageCircle className="w-5 h-5 text-coach-blue" />
               <h3 className="text-lg font-bold">Ask a question</h3>
             </div>
+            <p className="text-sm text-muted-foreground">
+              Ask anything: explain a concept, solve step by step, or say &quot;make a similar story problem&quot;.
+            </p>
 
             <textarea
               value={questionInput}
               onChange={(event) => setQuestionInput(event.target.value)}
-              placeholder="Ask about this story, step, or equation..."
+              placeholder="Ask any math question... or request a similar story problem."
               className="min-h-[100px] w-full rounded-2xl border-2 border-slate-200 bg-white p-4 text-sm outline-none focus:border-coach-purple"
             />
 
@@ -384,10 +390,33 @@ export default function ProblemPage() {
               </div>
             )}
 
-            {qnaAnswer && (
+            {qnaResult && (
               <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4">
                 <p className="text-xs uppercase tracking-[0.2em] text-blue-700">Answer</p>
-                <p className="mt-2 text-sm leading-relaxed text-blue-900">{qnaAnswer}</p>
+                <p className="mt-2 text-sm leading-relaxed text-blue-900">{qnaResult.answer}</p>
+
+                {qnaResult.steps && qnaResult.steps.length > 0 && (
+                  <div className="mt-4 rounded-xl bg-white/80 p-3">
+                    <p className="text-xs uppercase tracking-[0.2em] text-blue-700">Step-by-step</p>
+                    <ol className="mt-2 list-decimal pl-5 space-y-1 text-sm text-blue-900">
+                      {qnaResult.steps.map((step, index) => (
+                        <li key={`${step}-${index}`}>{step}</li>
+                      ))}
+                    </ol>
+                  </div>
+                )}
+
+                {qnaResult.generatedStory && (
+                  <div className="mt-4 rounded-xl bg-white/80 p-3 space-y-2">
+                    <p className="text-xs uppercase tracking-[0.2em] text-blue-700">Similar story</p>
+                    <p className="text-sm font-semibold text-blue-900">{qnaResult.generatedStory.title}</p>
+                    <p className="text-sm text-blue-900">{qnaResult.generatedStory.story}</p>
+                    <p className="text-sm font-medium text-blue-900">{qnaResult.generatedStory.question}</p>
+                    {qnaResult.generatedStory.equationHint && (
+                      <p className="text-xs text-blue-700">Equation hint: {qnaResult.generatedStory.equationHint}</p>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </CardContent>

@@ -3,7 +3,7 @@
 import { Suspense, useMemo, useState } from "react"
 import { motion } from "framer-motion"
 import { useRouter, useSearchParams } from "next/navigation"
-import { ArrowRight, Sparkles } from "lucide-react"
+import { ArrowRight, MessageCircle, Sparkles } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { GradeSelector } from "@/components/GradeSelector"
@@ -36,7 +36,13 @@ function DashboardContent() {
           <h1 className="text-4xl font-extrabold">Choose a story</h1>
           <p className="text-muted-foreground mt-2">One screen, one story, one next move.</p>
         </div>
-        <Button variant="outline" onClick={() => router.push("/")}>Back Home</Button>
+        <div className="flex gap-2 flex-wrap">
+          <Button variant="outline" onClick={() => router.push("/ask")}>
+            <MessageCircle className="w-4 h-4 mr-2" />
+            Ask Anything
+          </Button>
+          <Button variant="outline" onClick={() => router.push("/")}>Back Home</Button>
+        </div>
       </div>
 
       <Card className="mb-8 border-white/60 bg-white/75 backdrop-blur">

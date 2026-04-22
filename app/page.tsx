@@ -103,7 +103,7 @@ export default function LandingPage() {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 1 }}
-        className="text-center"
+        className="text-center flex justify-center gap-3 flex-wrap"
       >
         <Button
           variant="coach"
@@ -113,6 +113,13 @@ export default function LandingPage() {
         >
           Pick a Story
           <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
+        </Button>
+        <Button
+          variant="outline"
+          size="lg"
+          onClick={() => router.push('/ask')}
+        >
+          Ask Anything
         </Button>
       </motion.div>
     </div>

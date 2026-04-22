@@ -127,8 +127,11 @@ export interface SimilarProblemResponse {
 }
 
 export interface QnARequest {
-  problemId: string;
+  problemId?: string;
   question: string;
+  language?: 'en' | 'hi';
+  askForStory?: boolean;
+  askForStepByStep?: boolean;
   context?: {
     stage?: string;
     selectedOperation?: string;
@@ -136,8 +139,18 @@ export interface QnARequest {
   };
 }
 
+export interface GeneratedStory {
+  title: string;
+  story: string;
+  question: string;
+  equationHint?: string;
+}
+
 export interface QnAResponse {
+  mode?: 'explain' | 'solve' | 'story';
   answer: string;
+  steps?: string[];
+  generatedStory?: GeneratedStory;
 }
 
 export interface Message {
