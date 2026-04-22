@@ -126,6 +126,20 @@ export interface SimilarProblemResponse {
   problem: Problem;
 }
 
+export interface QnARequest {
+  problemId: string;
+  question: string;
+  context?: {
+    stage?: string;
+    selectedOperation?: string;
+    equationDraft?: string;
+  };
+}
+
+export interface QnAResponse {
+  answer: string;
+}
+
 export interface Message {
   role: 'user' | 'assistant' | 'system';
   content: string;

@@ -3,14 +3,14 @@
 import { useEffect, useMemo, useState } from "react"
 import { AnimatePresence, motion } from "framer-motion"
 import { useParams, useRouter } from "next/navigation"
-import { ArrowLeft, ArrowRight, Check, Languages, RefreshCw, Sparkles, Volume2, VolumeX } from "lucide-react"
+import { ArrowLeft, ArrowRight, Check, Languages, MessageCircle, RefreshCw, Sparkles, Volume2, VolumeX } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { CoachAvatar } from "@/components/CoachAvatar"
 import { useSpeech } from "@/hooks/useSpeech"
 import { buildHint, evaluateAnswer, getStoryProblem, listStoryProblems, type LanguageCode, type StoryStage } from "@/lib/answer-engine"
 import { getEncouragementMessage } from "@/lib/utils"
-import type { Hint } from "@/lib/types"
+import type { Hint, QnAResponse } from "@/lib/types"
 
 const operationCopy: Record<string, { label: string; description: string }> = {
   addition: { label: "Add", description: "Put amounts together" },
@@ -62,6 +62,10 @@ export default function ProblemPage() {
   const [language, setLanguage] = useState<LanguageCode>("en")
   const [showSolution, setShowSolution] = useState(false)
   const [autoRead, setAutoRead] = useState(true)
+  const [questionInput, setQuestionInput] = useState("")
+  const [qnaAnswer, setQnaAnswer] = useState<string | null>(null)
+  const [qnaLoading, setQnaLoading] = useState(false)
+  const [qnaError, setQnaError] = useState<string | null>(null)
 
   const { speak, stop, isSpeechSupported, isSpeaking } = useSpeech()
 
@@ -74,6 +78,9 @@ export default function ProblemPage() {
     setHint(null)
     setHintLevel(1)
     setShowSolution(false)
+    setQuestionInput("")
+    setQnaAnswer(null)
+    setQnaError(null)
   }, [problem.id, problem.autoEquation])
 
   useEffect(() => {
@@ -137,6 +144,48 @@ export default function ProblemPage() {
     const currentIndex = listStoryProblems().findIndex((item) => item.id === problem.id)
     const nextProblem = listStoryProblems()[(currentIndex + 1) % listStoryProblems().length]
     router.push(`/problem/${nextProblem.id}`)
+  }
+
+  const handleAskQuestion = async () => {
+    const question = questionInput.trim()
+
+    if (!question || qnaLoading) {
+      return
+    }
+
+    setQnaLoading(true)
+    setQnaError(null)
+
+    try {
+      const response = await fetch("/api/qna", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          problemId: problem.id,
+          question,
+          context: {
+            stage,
+            selectedOperation,
+            equationDraft,
+          },
+        }),
+      })
+
+      const data = (await response.json()) as { success?: boolean; error?: string } & Partial<QnAResponse>
+
+      if (!response.ok || !data.success || !data.answer) {
+        throw new Error(data.error ?? "Unable to answer this question right now.")
+      }
+
+      setQnaAnswer(data.answer)
+    } catch (error) {
+      console.error("QnA request failed:", error)
+      setQnaError(error instanceof Error ? error.message : "Unable to answer this question right now.")
+    } finally {
+      setQnaLoading(false)
+    }
   }
 
   return (
@@ -308,6 +357,41 @@ export default function ProblemPage() {
             </CardContent>
           </Card>
         </div>
+
+        <Card className="border-white/60 bg-white/85 backdrop-blur shadow-lg">
+          <CardContent className="p-6 space-y-4">
+            <div className="flex items-center gap-2">
+              <MessageCircle className="w-5 h-5 text-coach-blue" />
+              <h3 className="text-lg font-bold">Ask a question</h3>
+            </div>
+
+            <textarea
+              value={questionInput}
+              onChange={(event) => setQuestionInput(event.target.value)}
+              placeholder="Ask about this story, step, or equation..."
+              className="min-h-[100px] w-full rounded-2xl border-2 border-slate-200 bg-white p-4 text-sm outline-none focus:border-coach-purple"
+            />
+
+            <div className="flex justify-end">
+              <Button variant="coach" onClick={handleAskQuestion} disabled={qnaLoading || questionInput.trim().length === 0}>
+                {qnaLoading ? "Thinking..." : "Ask"}
+              </Button>
+            </div>
+
+            {qnaError && (
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                {qnaError}
+              </div>
+            )}
+
+            {qnaAnswer && (
+              <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4">
+                <p className="text-xs uppercase tracking-[0.2em] text-blue-700">Answer</p>
+                <p className="mt-2 text-sm leading-relaxed text-blue-900">{qnaAnswer}</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         <AnimatePresence>
           {feedback && (
