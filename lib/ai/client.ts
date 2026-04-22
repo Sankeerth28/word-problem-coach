@@ -18,7 +18,7 @@ function getOpenAIProvider() {
 // Model configuration
 const MODEL_CONFIG = {
   model: 'gpt-4o', // GPT-4o - best for education
-  maxTokens: 1024,
+  maxOutputTokens: 1024,
   temperature: 0.7, // Balanced creativity/consistency
 }
 
@@ -39,11 +39,23 @@ export async function streamAIResponse({
       system: systemPrompt,
       prompt,
       temperature: MODEL_CONFIG.temperature,
-      maxTokens: MODEL_CONFIG.maxTokens,
-      onFinish: (result) => {
+      maxOutputTokens: MODEL_CONFIG.maxOutputTokens,
+      onFinish: (result: { text: string }) => {
         console.log('AI Response completed:', result.text.substring(0, 100))
       },
     })
+
+    if (onChunk) {
+      void (async () => {
+        try {
+          for await (const chunk of result.textStream) {
+            onChunk(chunk)
+          }
+        } catch (streamError) {
+          console.error('AI Streaming Chunk Error:', streamError)
+        }
+      })()
+    }
 
     return result
   } catch (error) {
@@ -69,7 +81,7 @@ export async function generateAIResponse({
       system: systemPrompt,
       prompt,
       temperature: jsonMode ? 0.3 : MODEL_CONFIG.temperature, // Lower temp for JSON
-      maxTokens: MODEL_CONFIG.maxTokens,
+      maxOutputTokens: MODEL_CONFIG.maxOutputTokens,
     })
 
     if (jsonMode) {
@@ -127,22 +139,28 @@ export function parseAIFeedback(response: string): AIFeedback {
       throw new Error('No JSON found in response')
     }
 
-    const parsed = JSON.parse(jsonMatch[0])
+    const parsed = JSON.parse(jsonMatch[0]) as Record<string, unknown>
 
     return {
-      isValid: parsed.isValid ?? false,
-      message: parsed.message ?? 'Good thinking! Let\'s work through this.',
+      isValid: Boolean(parsed.isValid),
+      message: typeof parsed.message === 'string'
+        ? parsed.message
+        : 'Good thinking! Let\'s work through this.',
       misconceptions: Array.isArray(parsed.misconceptions)
-        ? parsed.misconceptions.map((m: any) => ({
-            type: m?.type ?? 'unknown',
-            description: m?.description ?? '',
-            severity: normalizeSeverity(m?.severity),
-            studentInput: m?.studentInput ?? '',
-            correction: m?.correction ?? '',
-          }))
+        ? parsed.misconceptions.map((misconception) => {
+            const item = (misconception ?? {}) as Record<string, unknown>
+
+            return {
+              type: String(item.type ?? 'unknown'),
+              description: String(item.description ?? ''),
+              severity: normalizeSeverity(item.severity),
+              studentInput: String(item.studentInput ?? ''),
+              correction: String(item.correction ?? ''),
+            }
+          })
         : [],
-      encouragement: parsed.encouragement ?? 'Keep going!',
-      nextStepHint: parsed.nextStepHint,
+      encouragement: String(parsed.encouragement ?? 'Keep going!'),
+      nextStepHint: typeof parsed.nextStepHint === 'string' ? parsed.nextStepHint : undefined,
     }
   } catch (error) {
     console.error('Failed to parse feedback:', error)
