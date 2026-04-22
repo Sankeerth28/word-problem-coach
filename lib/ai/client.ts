@@ -26,19 +26,20 @@ const MODEL_CONFIG = {
 export async function streamAIResponse({
   prompt,
   systemPrompt,
+  onChunk,
 }: {
   prompt: string
   systemPrompt: string
+  onChunk?: (chunk: string) => void
 }) {
   try {
     const openaiProvider = getOpenAIProvider()
-    const model = openaiProvider.languageModel(MODEL_CONFIG.model as never)
     const result = await streamText({
-      model: model as never,
+      model: openaiProvider.languageModel(MODEL_CONFIG.model),
       system: systemPrompt,
       prompt,
       temperature: MODEL_CONFIG.temperature,
-      maxOutputTokens: MODEL_CONFIG.maxTokens,
+      maxTokens: MODEL_CONFIG.maxTokens,
       onFinish: (result) => {
         console.log('AI Response completed:', result.text.substring(0, 100))
       },
@@ -63,9 +64,8 @@ export async function generateAIResponse({
 }) {
   try {
     const openaiProvider = getOpenAIProvider()
-    const model = openaiProvider.languageModel(MODEL_CONFIG.model as never)
     const result = await generateText({
-      model: model as never,
+      model: openaiProvider.languageModel(MODEL_CONFIG.model),
       system: systemPrompt,
       prompt,
       temperature: jsonMode ? 0.3 : MODEL_CONFIG.temperature, // Lower temp for JSON
@@ -133,16 +133,13 @@ export function parseAIFeedback(response: string): AIFeedback {
       isValid: parsed.isValid ?? false,
       message: parsed.message ?? 'Good thinking! Let\'s work through this.',
       misconceptions: Array.isArray(parsed.misconceptions)
-        ? parsed.misconceptions.map((m: unknown) => {
-            const misconception = (m ?? {}) as Record<string, unknown>
-            return {
-              type: String(misconception.type ?? 'unknown'),
-              description: String(misconception.description ?? ''),
-              severity: normalizeSeverity(misconception.severity),
-              studentInput: String(misconception.studentInput ?? ''),
-              correction: String(misconception.correction ?? ''),
-            }
-          })
+        ? parsed.misconceptions.map((m: any) => ({
+            type: m?.type ?? 'unknown',
+            description: m?.description ?? '',
+            severity: normalizeSeverity(m?.severity),
+            studentInput: m?.studentInput ?? '',
+            correction: m?.correction ?? '',
+          }))
         : [],
       encouragement: parsed.encouragement ?? 'Keep going!',
       nextStepHint: parsed.nextStepHint,
