@@ -38,7 +38,7 @@ export async function streamAIResponse({
       system: systemPrompt,
       prompt,
       temperature: MODEL_CONFIG.temperature,
-      maxTokens: MODEL_CONFIG.maxTokens,
+      maxOutputTokens: MODEL_CONFIG.maxTokens,
       onFinish: (result) => {
         console.log('AI Response completed:', result.text.substring(0, 100))
       },
